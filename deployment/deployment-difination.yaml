@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment 
+metadata: 
+  name: my-deployment 
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: dev-app
+  template:
+    metadata:
+      name: deploy-pod
+      labels:
+        app: dev-app
+    spec:
+      containers:
+        - name: nginx-dev
+          image: nginx:latest
+          resources:
+            requests:  
+              cpu: 100m
+              memory: 150Mi
+            limits:
+              cpu: 200m
+              memory: 250Mi
+

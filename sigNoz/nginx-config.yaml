@@ -1,0 +1,24 @@
+# nginx-config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-nginx-config
+  namespace: signoz
+data:
+  default.conf: |
+    server {
+      listen 3000;
+      
+      location / {
+        root /usr/share/nginx/html;
+        try_files $uri $uri/ /index.html;
+      }
+      
+      location /api/ {
+        proxy_pass http://query-service:8080;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+      }
+    }
+

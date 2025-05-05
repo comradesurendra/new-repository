@@ -1,0 +1,95 @@
+# query-service.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: query-service
+  namespace: signoz
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: query-service
+  template:
+    metadata:
+      labels:
+        app: query-service
+    spec:
+      containers:
+        - name: query-service
+          image: signoz/query-service:latest
+          volumeMounts:
+            - name: signoz-data
+              mountPath: /var/lib/signoz
+          env:
+            - name: DEBUG
+              value: "true"
+            - name: CLICKHOUSE_URL
+              value: "tcp://clickhouse:9000"
+            - name: CLICKHOUSE_HOST # Add this to ensure compatibility
+              value: "clickhouse"
+            - name: CLICKHOUSE_PORT # Add this to ensure compatibility
+              value: "9000"
+            - name: ClickHouseUrl # Some versions use this capitalization
+              value: "tcp://clickhouse:9000"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          ports:
+            - containerPort: 8080
+      volumes:
+        - name: signoz-data
+          persistentVolumeClaim:
+            claimName: query-service-pvc
+---
+# query-service-pv.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: query-service-pv
+spec:
+  capacity:
+    storage: 1Gi
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  local:
+    path: /mnt/signoz # Directory on your node
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - 24-131-idc.justdial.com # Replace with your node name
+---
+# query-service-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: query-service-pvc
+  namespace: signoz
+spec:
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: query-service
+  namespace: signoz
+spec:
+  selector:
+    app: query-service
+  ports:
+    - port: 8080
+      targetPort: 8080

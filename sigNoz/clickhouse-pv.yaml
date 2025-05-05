@@ -1,0 +1,23 @@
+# clickhouse-pv.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: clickhouse-pv
+spec:
+  capacity:
+    storage: 50Gi  # Match your PVC request
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain  # Or Delete
+  storageClassName: local-storage  # Match your PVC's StorageClass
+  local:
+    path: /mnt/data/clickhouse  # Directory on your node
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - 24-131-idc.justdial.com  # Replace with your node's name

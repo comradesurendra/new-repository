@@ -1,0 +1,13 @@
+# clickhouse-pvc.yaml (updated)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: clickhouse-pvc
+  namespace: signoz
+spec:
+  storageClassName: local-storage  # Match the PV
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi

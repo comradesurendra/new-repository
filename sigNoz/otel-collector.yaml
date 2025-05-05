@@ -1,0 +1,122 @@
+# otel-collector.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: signoz
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      serviceAccountName: otel-collector
+      containers:
+        - name: otel-collector
+          image: signoz/signoz-otel-collector:0.111.38
+          args: ["--config=/etc/otel/config.yaml"]
+          volumeMounts:
+            - name: otel-config
+              mountPath: /etc/otel
+      volumes:
+        - name: otel-config
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: signoz
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+          http:
+      prometheus:
+        config:
+          scrape_configs:
+            # Scrape Istio control plane (istiod)
+            - job_name: 'istiod'
+              kubernetes_sd_configs:
+              - role: endpoints
+                namespaces:
+                  names: ['istio-system']
+              relabel_configs:
+              - source_labels: [__meta_kubernetes_service_name]
+                action: keep
+                regex: istiod
+              - source_labels: [__meta_kubernetes_endpoint_port_name]
+                action: keep
+                regex: http-monitoring
+              metric_relabel_configs:
+              - source_labels: [__name__]
+                regex: 'pilot.*'
+                action: keep
+                
+            # Scrape Istio Proxies (Envoy)
+            - job_name: 'envoy-stats'
+              metrics_path: /stats/prometheus
+              kubernetes_sd_configs:
+              - role: pod
+              relabel_configs:
+              - source_labels: [__meta_kubernetes_pod_container_name]
+                action: keep
+                regex: istio-proxy
+              - source_labels: [__address__]
+                action: replace
+                regex: ([^:]+)(?::\d+)?
+                replacement: $$$1:15090
+                target_label: __address__
+              metric_relabel_configs:
+              - source_labels: [__name__]
+                regex: 'envoy_.*'
+                action: keep
+                
+            # Scrape Istio gateways
+            - job_name: 'istio-gateways'
+              kubernetes_sd_configs:
+              - role: endpoints
+                namespaces:
+                  names: ['istio-system']
+              relabel_configs:
+              - source_labels: [__meta_kubernetes_service_name]
+                action: keep
+                regex: istio-ingressgateway
+              metric_relabel_configs:
+              - source_labels: [__name__]
+                regex: 'istio_.*'
+                action: keep
+
+    processors:
+      batch:
+
+    exporters:
+      clickhousetraces:
+        datasource: tcp://clickhouse:9000/?database=signoz_traces&username=default&password=
+        low_cardinal_exception_grouping: true
+      signozclickhousemetrics:
+        dsn: tcp://clickhouse:9000/default
+      clickhouselogsexporter:
+        dsn: tcp://clickhouse:9000/default
+
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [clickhousetraces]
+        metrics:
+          receivers: [otlp, prometheus]
+          processors: [batch]
+          exporters: [signozclickhousemetrics]
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [clickhouselogsexporter]
